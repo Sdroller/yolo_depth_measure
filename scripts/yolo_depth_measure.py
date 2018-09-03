@@ -9,6 +9,7 @@ import cv2
 
 topic_depth_image = '/zed/depth/depth_registered' #Image: 32-bit depth values in meters
 topic_bounding_box = 'YOLO_bboxes'
+distance_to_person = 0
 
 def callback(bbox_array, zed_depth_img):
 
@@ -26,7 +27,6 @@ def callback(bbox_array, zed_depth_img):
                 centroid_bbox = [(i.xmin + i.xmax)/2, (i.ymin + i.ymax)/2]
                 last_confidence = i.prob
 
-
     if(zed_depth_img.encoding == '32FC1'):
         bridge = CvBridge()
         try:
@@ -36,13 +36,19 @@ def callback(bbox_array, zed_depth_img):
     else:
         rospy.logerror("ERROR: Depth Images from Zed are not in 32FC1, something is wrong")
 
-    # Calculate distance to person based on mean of 11px around the centroid of bounding box
-    mean_depth_image = cv_depth_image[centroid_bbox[1]-5:centroid_bbox[1]+5, centroid_bbox[0]-5:centroid_bbox[1]+5]
-    mean_depth, stddev_depth = cv2.meanStdDev(mean_depth_image)
+    # # Calculate distance to person based on mean of 11px around the centroid of bounding box
+    # mean_depth_image = cv_depth_image[centroid_bbox[1]-5:centroid_bbox[1]+5, centroid_bbox[0]-5:centroid_bbox[0]+5]
+    # #convert to numpy, then
+    # from numpoy import inf
+    # x[x == inf] = 0
+    # numpy.nanmean()
+    # mean_depth, stddev_depth = cv2.meanStdDev(mean_depth_image)
+    # distance_to_person = mean_depth
 
+    distance_to_person = cv_depth_image[centroid_bbox[1],centroid_bbox[0]]
     if(person_detected == 1 ):
         rospy.loginfo("Person Detected!\n Prediction Prob:\t %f\n Centroid of Box:\t %d, %d\n Distance to person:\t%f",\
-            i.prob, centroid_bbox[1], centroid_bbox[0], mean_depth)
+            i.prob, centroid_bbox[1], centroid_bbox[0], distance_to_person)
 
 
 def listener():

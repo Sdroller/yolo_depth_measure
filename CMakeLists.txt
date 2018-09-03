@@ -12,9 +12,7 @@ find_package(catkin REQUIRED
   rospy
   std_msgs
   message_generation
-  pcl_ros
   cv_bridge
-  ros_numpy
 )
 find_package(OpenCV)
 ## System dependencies are found with CMake's conventions
@@ -122,7 +120,6 @@ catkin_package(
 include_directories(
  include
  ${catkin_INCLUDE_DIRS}
- ${PCL_INCLUDE_DIRS}
  ${OpenCV_INCLUDE_DIRS}
 )
 
