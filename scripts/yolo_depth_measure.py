@@ -20,8 +20,12 @@ distance_to_person_filtered = 0
 print_distance_arrays = False # Setting this to true will print arrays used to detect distance to person.
 
 class distance_detection:
+    # Variables for the Moving Average Filter
     old_filterOutput=0.0
-    new_filterOutput=0.0;
+
+    # Variables for the Exponential Moving Average Filter
+    ema_old_filterOutput=0.0
+
 
     def __init__(self):
         # We use time TimeSynchronizer to sub to multiple topics
@@ -86,17 +90,18 @@ class distance_detection:
             distance_to_person = np.mean(mean_depth_image_clean)
 
             # Apply Exponential Moving Average Filter on the value
-            distance_to_person_filtered = filter_input(distance_to_person, 10)
+            distance_to_person_filtered = self.filter_input_ema(distance_to_person, 0.3)
 
             #Publish the distance
             self.dist_pub.publish(distance_to_person)
             self.dist_filtered_pub.publish(distance_to_person_filtered)
 
 
-            rospy.loginfo("Person Detected!\n Bounding Box:\t (%d,%d), (%d,%d)\n Centroid of Box:\t %d,%d\n \
-    Prediction Prob:\t %0.3f\n Distance to person:\t%0.3f m\n\n",\
-            detected_person_bbox[0], detected_person_bbox[1], detected_person_bbox[2], detected_person_bbox[3],\
-            centroid_bbox[1], centroid_bbox[0], last_confidence, distance_to_person)
+            rospy.loginfo("Person Detected!\n Bounding Box:\t (%d,%d), (%d,%d)\n Centroid of Box:\t %d,%d\n", \
+                detected_person_bbox[0], detected_person_bbox[1], detected_person_bbox[2], detected_person_bbox[3], \
+                centroid_bbox[1], centroid_bbox[0])
+            rospy.loginfo("Prediction Prob:\t %0.3f\n distance_to_person_raw:\t%0.3f m\n distance_to_person_filtered:\t%0.3f m\n", \
+                last_confidence, distance_to_person, distance_to_person_filtered)
 
             if(print_distance_arrays):
                 print("Raw mean depth img:")
@@ -107,29 +112,36 @@ class distance_detection:
         else:
             rospy.loginfo("No Person Detected...")
 
-    def filter_input(nextElement, divisionFactor):
+    def filter_input_ma(self, nextElement, weight):
     	"""
+    	This is an moving average filter
+        Weight should be in range (0,1)
+    	"""
+
+    	new_filterOutput= (1-float(weight))*self.old_filterOutput + float(weight)*nextElement;
+    	self.old_filterOutput=new_filterOutput;
+    	return new_filterOutput;
+
+
+    def filter_input_ema(self, nextElement, weight):
+        '''
     	Derived from: http://controlguru.com/pid-with-controller-output-co-filter/
     	This is an exponential moving average filter
-    	"""
+        Weight should be in range (0,1)
 
-
-
-    	"""
     	Filter = first order filter without dead time:
-    	     new_filterOutput = old_filterOutput + (1/(2^divisionFactor))*(nextElement - old_filterOutput)
+    	     new_filterOutput = old_filterOutput + (T/Tf)*(nextElement - old_filterOutput)
 
     		where,	T  = loop sample time,
     				Tf = Filter Time (time req for filter value to reach 63% of desired/input value)
 
     			    T=1ms=0.001, Tf=3ms= 0.003
     				hence, T/Tf=0.001/0.003=0.333
-    	"""
-    	self.new_filterOutput= self.old_filterOutput+((nextElement-self.old_filterOutput)/divisionFactor);
+    	'''
 
-    	self.old_filterOutput=self.new_filterOutput;
-
-    	return self.new_filterOutput;
+    	new_filterOutput= self.ema_old_filterOutput + (weight)*(nextElement-self.ema_old_filterOutput)
+    	self.ema_old_filterOutput= new_filterOutput;
+    	return new_filterOutput;
 
 def main(args):
     '''Initializes and cleanup ros node'''
