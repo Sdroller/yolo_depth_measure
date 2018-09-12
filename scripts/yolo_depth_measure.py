@@ -11,12 +11,18 @@ from numpy import inf
 
 topic_depth_image = '/zed/depth/depth_registered' #Image: 32-bit depth values in meters
 topic_bounding_box = 'YOLO_bboxes'
+topic_distance_to_person_raw = 'distance_to_person'
+topic_distance_to_person_filtered = 'distance_to_person_filtered'
 img_height = 672
 img_width =  376
 distance_to_person = 0
+distance_to_person_filtered = 0
 print_distance_arrays = False # Setting this to true will print arrays used to detect distance to person.
 
 class distance_detection:
+    old_filterOutput=0.0
+    new_filterOutput=0.0;
+
     def __init__(self):
         # We use time TimeSynchronizer to sub to multiple topics
         self.bbox_sub = message_filters.Subscriber(topic_bounding_box, bbox_array)
@@ -25,7 +31,8 @@ class distance_detection:
         self.ts.registerCallback(self.callback)
 
         # We publish the distance detected
-        self.dist_pub = rospy.Publisher('distance_to_person', Float32, queue_size=10)
+        self.dist_pub = rospy.Publisher(topic_distance_to_person_raw, Float32, queue_size=10)
+        self.dist_filtered_pub = rospy.Publisher(topic_distance_to_person_filtered, Float32, queue_size=10)
 
 
 
@@ -78,8 +85,12 @@ class distance_detection:
             mean_depth_image_clean[~np.isfinite(mean_depth_image)] = 0
             distance_to_person = np.mean(mean_depth_image_clean)
 
+            # Apply Exponential Moving Average Filter on the value
+            distance_to_person_filtered = filter_input(distance_to_person, 10)
+
             #Publish the distance
             self.dist_pub.publish(distance_to_person)
+            self.dist_filtered_pub.publish(distance_to_person_filtered)
 
 
             rospy.loginfo("Person Detected!\n Bounding Box:\t (%d,%d), (%d,%d)\n Centroid of Box:\t %d,%d\n \
@@ -96,13 +107,36 @@ class distance_detection:
         else:
             rospy.loginfo("No Person Detected...")
 
+    def filter_input(nextElement, divisionFactor):
+    	"""
+    	Derived from: http://controlguru.com/pid-with-controller-output-co-filter/
+    	This is an exponential moving average filter
+    	"""
+
+
+
+    	"""
+    	Filter = first order filter without dead time:
+    	     new_filterOutput = old_filterOutput + (1/(2^divisionFactor))*(nextElement - old_filterOutput)
+
+    		where,	T  = loop sample time,
+    				Tf = Filter Time (time req for filter value to reach 63% of desired/input value)
+
+    			    T=1ms=0.001, Tf=3ms= 0.003
+    				hence, T/Tf=0.001/0.003=0.333
+    	"""
+    	self.new_filterOutput= self.old_filterOutput+((nextElement-self.old_filterOutput)/divisionFactor);
+
+    	self.old_filterOutput=self.new_filterOutput;
+
+    	return self.new_filterOutput;
 
 def main(args):
     '''Initializes and cleanup ros node'''
     rospy.init_node('yolo_depth_measure_node', anonymous=False)
     rospy.loginfo("Yolo Depth Measure node started")
     dt = distance_detection()
-    
+
     try:
         # spin() simply keeps python from exiting until this node is stopped
         rospy.spin()
