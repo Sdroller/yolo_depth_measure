@@ -116,6 +116,8 @@ class distance_detection:
     	"""
     	This is an moving average filter
         Weight should be in range (0,1)
+
+        new_filterOutput = (1-percentage_weightage)*old_filterOutput + (percentage_weightage)*nextElement
     	"""
 
     	new_filterOutput= (1-float(weight))*self.old_filterOutput + float(weight)*nextElement;
