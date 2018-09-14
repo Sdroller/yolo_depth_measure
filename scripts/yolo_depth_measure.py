@@ -13,6 +13,7 @@ topic_depth_image = '/zed/depth/depth_registered' #Image: 32-bit depth values in
 topic_bounding_box = 'YOLO_bboxes'
 topic_distance_to_person_raw = 'distance_to_person'
 topic_distance_to_person_filtered = 'distance_to_person_filtered'
+topic_centroid_pos_x = 'centroid_pos_x'
 img_width = 672
 img_height =  376
 distance_to_person = 0
@@ -37,6 +38,7 @@ class distance_detection:
         # We publish the distance detected
         self.dist_pub = rospy.Publisher(topic_distance_to_person_raw, Float32, queue_size=10)
         self.dist_filtered_pub = rospy.Publisher(topic_distance_to_person_filtered, Float32, queue_size=10)
+        self.centroid_position_x = rospy.Publisher(topic_centroid_pos_x, Float32, queue_size=10)
 
 
 
@@ -95,6 +97,7 @@ class distance_detection:
             #Publish the distance
             self.dist_pub.publish(distance_to_person)
             self.dist_filtered_pub.publish(distance_to_person_filtered)
+            self.centroid_position_x.publish(centroid_bbox[0])
 
 
             rospy.loginfo("Person Detected!\n Bounding Box:\t (%d,%d), (%d,%d)\n Centroid of Box:\t %d,%d\n", \
@@ -105,9 +108,9 @@ class distance_detection:
 
             if(print_distance_arrays):
                 print("Raw mean depth img:")
-                print np.array_str(mean_depth_image, precision=2)
+                print(np.array_str(mean_depth_image, precision=2))
                 print("\n\nClean depth img:")
-                print np.array_str(mean_depth_image_clean, precision=2)
+                print(np.array_str(mean_depth_image_clean, precision=2))
                 print("\n\n")
         else:
             rospy.loginfo("No Person Detected...")
@@ -127,23 +130,23 @@ class distance_detection:
 
     def filter_input_ema(self, nextElement, weight):
         '''
-    	Derived from: http://controlguru.com/pid-with-controller-output-co-filter/
-    	This is an exponential moving average filter
-        Weight should be in range (0,1)
+        	Derived from: http://controlguru.com/pid-with-controller-output-co-filter/
+        	This is an exponential moving average filter
+            Weight should be in range (0,1)
 
-    	Filter = first order filter without dead time:
-    	     new_filterOutput = old_filterOutput + (T/Tf)*(nextElement - old_filterOutput)
+        	Filter = first order filter without dead time:
+        	     new_filterOutput = old_filterOutput + (T/Tf)*(nextElement - old_filterOutput)
 
-    		where,	T  = loop sample time,
-    				Tf = Filter Time (time req for filter value to reach 63% of desired/input value)
+        		where,	T  = loop sample time,
+        				Tf = Filter Time (time req for filter value to reach 63% of desired/input value)
 
-    			    T=1ms=0.001, Tf=3ms= 0.003
-    				hence, T/Tf=0.001/0.003=0.333
-    	'''
+        			    T=1ms=0.001, Tf=3ms= 0.003
+        				hence, T/Tf=0.001/0.003=0.333
+        	'''
 
-    	new_filterOutput= self.ema_old_filterOutput + (weight)*(nextElement-self.ema_old_filterOutput)
-    	self.ema_old_filterOutput= new_filterOutput;
-    	return new_filterOutput;
+        new_filterOutput = self.ema_old_filterOutput + (weight)*(nextElement - self.ema_old_filterOutput)
+        self.ema_old_filterOutput= new_filterOutput
+        return new_filterOutput
 
 def main(args):
     '''Initializes and cleanup ros node'''
