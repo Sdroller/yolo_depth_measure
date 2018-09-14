@@ -13,8 +13,8 @@ topic_depth_image = '/zed/depth/depth_registered' #Image: 32-bit depth values in
 topic_bounding_box = 'YOLO_bboxes'
 topic_distance_to_person_raw = 'distance_to_person'
 topic_distance_to_person_filtered = 'distance_to_person_filtered'
-img_height = 672
-img_width =  376
+img_width = 672
+img_height =  376
 distance_to_person = 0
 distance_to_person_filtered = 0
 print_distance_arrays = False # Setting this to true will print arrays used to detect distance to person.
@@ -79,8 +79,8 @@ class distance_detection:
             centroid_bbox[0] = (detected_person_bbox[0] + detected_person_bbox[2])/2
             centroid_bbox[1] = (detected_person_bbox[1] + detected_person_bbox[3])/2
 
-            centroid_bbox[0] = np.clip(centroid_bbox[0], (0 + window_dim), (img_width  - window_dim) )
-            centroid_bbox[1] = np.clip(centroid_bbox[1], (0 + window_dim), (img_height - window_dim) )
+            centroid_bbox[0] = np.clip(centroid_bbox[0], (0 + window_dim), (img_height  - window_dim) )
+            centroid_bbox[1] = np.clip(centroid_bbox[1], (0 + window_dim), (img_width - window_dim) )
             mean_depth_image = cv_depth_image[centroid_bbox[1]-window_dim:centroid_bbox[1]+window_dim,\
                                               centroid_bbox[0]-window_dim:centroid_bbox[0]+window_dim]
 
