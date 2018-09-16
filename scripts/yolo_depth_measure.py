@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+import sys
+sys.path.append('../')
+
 import rospy
 import message_filters
 from std_msgs.msg import *
@@ -8,6 +11,8 @@ from cv_bridge import CvBridge, CvBridgeError
 import cv2
 import numpy as np
 from numpy import inf
+
+from sort.sort import *
 
 topic_depth_image = '/zed/depth/depth_registered' #Image: 32-bit depth values in meters
 topic_bounding_box = 'YOLO_bboxes'
