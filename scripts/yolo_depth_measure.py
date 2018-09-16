@@ -13,15 +13,20 @@ topic_depth_image = '/zed/depth/depth_registered' #Image: 32-bit depth values in
 topic_bounding_box = 'YOLO_bboxes'
 topic_distance_to_person_raw = 'distance_to_person'
 topic_distance_to_person_filtered = 'distance_to_person_filtered'
-img_height = 672
-img_width =  376
+topic_centroid_pos_x = 'centroid_pos_x'
+img_width = 672
+img_height =  376
 distance_to_person = 0
 distance_to_person_filtered = 0
 print_distance_arrays = False # Setting this to true will print arrays used to detect distance to person.
 
 class distance_detection:
+    # Variables for the Moving Average Filter
     old_filterOutput=0.0
-    new_filterOutput=0.0;
+
+    # Variables for the Exponential Moving Average Filter
+    ema_old_filterOutput=0.0
+
 
     def __init__(self):
         # We use time TimeSynchronizer to sub to multiple topics
@@ -33,6 +38,7 @@ class distance_detection:
         # We publish the distance detected
         self.dist_pub = rospy.Publisher(topic_distance_to_person_raw, Float32, queue_size=10)
         self.dist_filtered_pub = rospy.Publisher(topic_distance_to_person_filtered, Float32, queue_size=10)
+        self.centroid_position_x = rospy.Publisher(topic_centroid_pos_x, Float32, queue_size=10)
 
 
 
@@ -75,8 +81,8 @@ class distance_detection:
             centroid_bbox[0] = (detected_person_bbox[0] + detected_person_bbox[2])/2
             centroid_bbox[1] = (detected_person_bbox[1] + detected_person_bbox[3])/2
 
-            centroid_bbox[0] = np.clip(centroid_bbox[0], (0 + window_dim), (img_width  - window_dim) )
-            centroid_bbox[1] = np.clip(centroid_bbox[1], (0 + window_dim), (img_height - window_dim) )
+            centroid_bbox[0] = np.clip(centroid_bbox[0], (0 + window_dim), (img_height  - window_dim) )
+            centroid_bbox[1] = np.clip(centroid_bbox[1], (0 + window_dim), (img_width - window_dim) )
             mean_depth_image = cv_depth_image[centroid_bbox[1]-window_dim:centroid_bbox[1]+window_dim,\
                                               centroid_bbox[0]-window_dim:centroid_bbox[0]+window_dim]
 
@@ -86,50 +92,61 @@ class distance_detection:
             distance_to_person = np.mean(mean_depth_image_clean)
 
             # Apply Exponential Moving Average Filter on the value
-            distance_to_person_filtered = filter_input(distance_to_person, 10)
+            distance_to_person_filtered = self.filter_input_ema(distance_to_person, 0.3)
 
             #Publish the distance
             self.dist_pub.publish(distance_to_person)
             self.dist_filtered_pub.publish(distance_to_person_filtered)
+            self.centroid_position_x.publish(centroid_bbox[1])
 
 
-            rospy.loginfo("Person Detected!\n Bounding Box:\t (%d,%d), (%d,%d)\n Centroid of Box:\t %d,%d\n \
-    Prediction Prob:\t %0.3f\n Distance to person:\t%0.3f m\n\n",\
-            detected_person_bbox[0], detected_person_bbox[1], detected_person_bbox[2], detected_person_bbox[3],\
-            centroid_bbox[1], centroid_bbox[0], last_confidence, distance_to_person)
+            rospy.loginfo("Person Detected!\n Bounding Box:\t (%d,%d), (%d,%d)\n Centroid of Box:\t %d,%d\n", \
+                detected_person_bbox[0], detected_person_bbox[1], detected_person_bbox[2], detected_person_bbox[3], \
+                centroid_bbox[1], centroid_bbox[0])
+            rospy.loginfo("Prediction Prob:\t %0.3f\n distance_to_person_raw:\t%0.3f m\n distance_to_person_filtered:\t%0.3f m\n", \
+                last_confidence, distance_to_person, distance_to_person_filtered)
 
             if(print_distance_arrays):
                 print("Raw mean depth img:")
-                print np.array_str(mean_depth_image, precision=2)
+                print(np.array_str(mean_depth_image, precision=2))
                 print("\n\nClean depth img:")
-                print np.array_str(mean_depth_image_clean, precision=2)
+                print(np.array_str(mean_depth_image_clean, precision=2))
                 print("\n\n")
         else:
             rospy.loginfo("No Person Detected...")
 
-    def filter_input(nextElement, divisionFactor):
+    def filter_input_ma(self, nextElement, weight):
     	"""
-    	Derived from: http://controlguru.com/pid-with-controller-output-co-filter/
-    	This is an exponential moving average filter
+    	This is an moving average filter
+        Weight should be in range (0,1)
+
+        new_filterOutput = (1-percentage_weightage)*old_filterOutput + (percentage_weightage)*nextElement
     	"""
 
+    	new_filterOutput= (1-float(weight))*self.old_filterOutput + float(weight)*nextElement;
+    	self.old_filterOutput=new_filterOutput;
+    	return new_filterOutput;
 
 
-    	"""
-    	Filter = first order filter without dead time:
-    	     new_filterOutput = old_filterOutput + (1/(2^divisionFactor))*(nextElement - old_filterOutput)
+    def filter_input_ema(self, nextElement, weight):
+        '''
+        	Derived from: http://controlguru.com/pid-with-controller-output-co-filter/
+        	This is an exponential moving average filter
+            Weight should be in range (0,1)
 
-    		where,	T  = loop sample time,
-    				Tf = Filter Time (time req for filter value to reach 63% of desired/input value)
+        	Filter = first order filter without dead time:
+        	     new_filterOutput = old_filterOutput + (T/Tf)*(nextElement - old_filterOutput)
 
-    			    T=1ms=0.001, Tf=3ms= 0.003
-    				hence, T/Tf=0.001/0.003=0.333
-    	"""
-    	self.new_filterOutput= self.old_filterOutput+((nextElement-self.old_filterOutput)/divisionFactor);
+        		where,	T  = loop sample time,
+        				Tf = Filter Time (time req for filter value to reach 63% of desired/input value)
 
-    	self.old_filterOutput=self.new_filterOutput;
+        			    T=1ms=0.001, Tf=3ms= 0.003
+        				hence, T/Tf=0.001/0.003=0.333
+        	'''
 
-    	return self.new_filterOutput;
+        new_filterOutput = self.ema_old_filterOutput + (weight)*(nextElement - self.ema_old_filterOutput)
+        self.ema_old_filterOutput= new_filterOutput
+        return new_filterOutput
 
 def main(args):
     '''Initializes and cleanup ros node'''
