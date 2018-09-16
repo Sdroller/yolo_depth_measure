@@ -97,7 +97,7 @@ class distance_detection:
             #Publish the distance
             self.dist_pub.publish(distance_to_person)
             self.dist_filtered_pub.publish(distance_to_person_filtered)
-            self.centroid_position_x.publish(centroid_bbox[0])
+            self.centroid_position_x.publish(centroid_bbox[1])
 
 
             rospy.loginfo("Person Detected!\n Bounding Box:\t (%d,%d), (%d,%d)\n Centroid of Box:\t %d,%d\n", \
