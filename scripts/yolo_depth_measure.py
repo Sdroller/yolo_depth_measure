@@ -19,6 +19,7 @@ topic_bounding_box = 'YOLO_bboxes'
 topic_distance_to_person_raw = 'distance_to_person'
 topic_distance_to_person_filtered = 'distance_to_person_filtered'
 topic_centroid_pos_x = 'centroid_pos_x'
+topic_rgb_image = '/zed/rgb/image_rect_color'
 img_width = 672
 img_height =  376
 distance_to_person = 0
@@ -37,7 +38,9 @@ class distance_detection:
         # We use time TimeSynchronizer to sub to multiple topics
         self.bbox_sub = message_filters.Subscriber(topic_bounding_box, bbox_array)
         self.depth_sub = message_filters.Subscriber(topic_depth_image, Image)
-        self.ts = message_filters.ApproximateTimeSynchronizer([self.bbox_sub, self.depth_sub], 5, 1, allow_headerless=True)
+        self.img_sub = message_filters.Subscriber(topic_rgb_image, Image)
+        self.ts = message_filters.ApproximateTimeSynchronizer([self.bbox_sub, self.depth_sub, self.img_sub],
+                                                               5, 1, allow_headerless=True)
         self.ts.registerCallback(self.callback)
 
         # We publish the distance detected
@@ -45,9 +48,13 @@ class distance_detection:
         self.dist_filtered_pub = rospy.Publisher(topic_distance_to_person_filtered, Float32, queue_size=10)
         self.centroid_position_x = rospy.Publisher(topic_centroid_pos_x, Float32, queue_size=10)
 
+        #create instance of SORT
+        self.mot_tracker = Sort()
+        self.detections = []
+        self.cvBridge = CvBridge()
 
 
-    def callback(self, bbox_array, zed_depth_img):
+    def callback(self, bbox_array, zed_depth_img, zed_rgb_img):
 
         person_detected = 0         # Value of 1 means a person has been detected
         centroid_bbox = [5000,5000]
@@ -58,9 +65,8 @@ class distance_detection:
 
         # Get the depth img
         if(zed_depth_img.encoding == '32FC1'):
-            bridge = CvBridge()
             try:
-              cv_depth_image = bridge.imgmsg_to_cv2(zed_depth_img, "32FC1")
+              cv_depth_image = self.cvBridge.imgmsg_to_cv2(zed_depth_img, "32FC1")
             except CvBridgeError as e:
               print(e)
               return
@@ -70,7 +76,14 @@ class distance_detection:
 
         # Get the bounding box of detected person, if any
         rospy.loginfo("Num of Classes detected by Yolo: %d" % (len(bbox_array.bboxes)))
+
+        detections_arr = []
         for detected_object in bbox_array.bboxes:
+            # format array for SORT's update step
+            detections_arr.append([detected_object.xmin, detected_object.ymin,\
+                          detected_object.xmax, detected_object.ymax,
+                          detected_object.prob])
+
             if(detected_object.Class == "person" and detected_object.prob > threshold_confidence):
                 person_detected = 1
                 # Keep only object with highest confidence of "person"
@@ -79,6 +92,8 @@ class distance_detection:
                                             detected_object.xmax, detected_object.ymax]
                     last_confidence = detected_object.prob
 
+        # Store the list of lists of all the detections
+        self.detections = np.array(detections_arr)
 
         if( person_detected == 1 ):
             # Calculate distance to person based on mean of 10px around the centroid of bounding box
@@ -105,11 +120,11 @@ class distance_detection:
             self.centroid_position_x.publish(centroid_bbox[1])
 
 
-            rospy.loginfo("Person Detected!\n Bounding Box:\t (%d,%d), (%d,%d)\n Centroid of Box:\t %d,%d\n", \
+            rospy.loginfo("Person Detected!\n Bounding Box:\t (%d,%d), (%d,%d)\n Centroid of Box:\t %d,%d\n Prediction \
+Prob:\t %0.3f\n distance_to_person_raw:\t%0.3f m\n distance_to_person_filtered:\t%0.3f m\n", \
                 detected_person_bbox[0], detected_person_bbox[1], detected_person_bbox[2], detected_person_bbox[3], \
-                centroid_bbox[1], centroid_bbox[0])
-            rospy.loginfo("Prediction Prob:\t %0.3f\n distance_to_person_raw:\t%0.3f m\n distance_to_person_filtered:\t%0.3f m\n", \
-                last_confidence, distance_to_person, distance_to_person_filtered)
+                centroid_bbox[1], centroid_bbox[0], last_confidence, distance_to_person, distance_to_person_filtered)
+
 
             if(print_distance_arrays):
                 print("Raw mean depth img:")
@@ -117,8 +132,20 @@ class distance_detection:
                 print("\n\nClean depth img:")
                 print(np.array_str(mean_depth_image_clean, precision=2))
                 print("\n\n")
+
         else:
             rospy.loginfo("No Person Detected...")
+
+        # Run SORT for tracking
+        track_bbs_ids = self.mot_tracker.update(self.detections) # track_bbs_ids is a np array where each row contains a valid bounding box and track_id (last column)
+
+        # Display the Tracking:
+        zed_image = self.cvBridge.imgmsg_to_cv2(zed_rgb_img, desired_encoding="passthrough")
+        for d in track_bbs_ids:
+            cv2.rectangle(zed_image,(int(d[0]), int(d[1])), (int(d[2]), int(d[3])), (0,255,0), thickness=3)
+
+        # cv2.imshow('zed_rgb_img',zed_image)
+        # cv2.waitKey(2)
 
     def filter_input_ma(self, nextElement, weight):
     	"""
