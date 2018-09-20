@@ -20,6 +20,7 @@ topic_distance_to_person_raw = 'distance_to_person'
 topic_distance_to_person_filtered = 'distance_to_person_filtered'
 topic_centroid_pos_x = 'centroid_pos_x'
 topic_rgb_image = '/zed/rgb/image_rect_color'
+topic_tracking_img = '/img_tracking_with_bounding_boxes'
 img_width = 672
 img_height =  376
 distance_to_person = 0
@@ -47,9 +48,10 @@ class distance_detection:
         self.dist_pub = rospy.Publisher(topic_distance_to_person_raw, Float32, queue_size=10)
         self.dist_filtered_pub = rospy.Publisher(topic_distance_to_person_filtered, Float32, queue_size=10)
         self.centroid_position_x = rospy.Publisher(topic_centroid_pos_x, Float32, queue_size=10)
+        self.tracking_pub = rospy.Publisher(topic_tracking_img, Image, queue_size=10)
 
         #create instance of SORT
-        self.mot_tracker = Sort()
+        self.mot_tracker = Sort(max_age=30,min_hits=5)
         self.detections = []
         self.cvBridge = CvBridge()
 
@@ -119,11 +121,13 @@ class distance_detection:
             self.dist_filtered_pub.publish(distance_to_person_filtered)
             self.centroid_position_x.publish(centroid_bbox[1])
 
+            msg_yolo_output1 = ("Person Detected!\n Bounding Box:\t (%d,%d), (%d,%d)\n Centroid of Box:\t %d,%d\n "
+                               %(detected_person_bbox[0], detected_person_bbox[1], detected_person_bbox[2],
+                               detected_person_bbox[3], centroid_bbox[1], centroid_bbox[0]) )
+            msg_yolo_output2 = ("Prediction Prob:\t %0.3f\n distance_to_person_raw:\t%0.3f m\n distance_to_person_filtered:\t%0.3f m\n"\
+                               %(last_confidence, distance_to_person, distance_to_person_filtered) )
+            rospy.loginfo("%s%s", msg_yolo_output1, msg_yolo_output2)
 
-            rospy.loginfo("Person Detected!\n Bounding Box:\t (%d,%d), (%d,%d)\n Centroid of Box:\t %d,%d\n Prediction \
-Prob:\t %0.3f\n distance_to_person_raw:\t%0.3f m\n distance_to_person_filtered:\t%0.3f m\n", \
-                detected_person_bbox[0], detected_person_bbox[1], detected_person_bbox[2], detected_person_bbox[3], \
-                centroid_bbox[1], centroid_bbox[0], last_confidence, distance_to_person, distance_to_person_filtered)
 
 
             if(print_distance_arrays):
@@ -137,27 +141,21 @@ Prob:\t %0.3f\n distance_to_person_raw:\t%0.3f m\n distance_to_person_filtered:\
             rospy.loginfo("No Person Detected...")
 
         # Run SORT for tracking
-        track_bbs_ids = self.mot_tracker.update(self.detections) # track_bbs_ids is a np array where each row contains a valid bounding box and track_id (last column)
+        track_bbs_ids, unmatched_trks_ids = self.mot_tracker.update(self.detections) # track_bbs_ids is a np array where each row contains a valid bounding box and track_id (last column)
+
+        # Compare the outputs of bbox from yolo and sort
+        print(bbox_array)
+        print(track_bbs_ids)
+        print('unmatched_trks_ids:')
+        print(unmatched_trks_ids)
 
         # Display the Tracking:
         zed_image = self.cvBridge.imgmsg_to_cv2(zed_rgb_img, desired_encoding="passthrough")
         for d in track_bbs_ids:
             cv2.rectangle(zed_image,(int(d[0]), int(d[1])), (int(d[2]), int(d[3])), (0,255,0), thickness=3)
 
-        # cv2.imshow('zed_rgb_img',zed_image)
-        # cv2.waitKey(2)
-
-    def filter_input_ma(self, nextElement, weight):
-    	"""
-    	This is an moving average filter
-        Weight should be in range (0,1)
-
-        new_filterOutput = (1-percentage_weightage)*old_filterOutput + (percentage_weightage)*nextElement
-    	"""
-
-    	new_filterOutput= (1-float(weight))*self.old_filterOutput + float(weight)*nextElement;
-    	self.old_filterOutput=new_filterOutput;
-    	return new_filterOutput;
+        cv_depth_image = self.cvBridge.cv2_to_imgmsg(zed_image, "bgr8")
+        self.tracking_pub.publish(cv_depth_image)
 
 
     def filter_input_ema(self, nextElement, weight):

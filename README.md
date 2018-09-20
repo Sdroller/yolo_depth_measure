@@ -7,16 +7,14 @@ To make the readings more robust, 2 techniques are used:
 - Distance is averaged from 10x10px around the centroid of the bounding box.
 - The distance reading may be noisy. It is filtered using an exponential moving average.
 
-There are 2 implementations of an exponential moving average filter in the code, any one may be used. They are both first order filters with similar performance:
-- The simplest filter is called `moving average` or `ma` in the code. It has the formula:
+There is an implementations of an Exponential Moving Average filter in the code. It is a first order filter with the formula:
 ```
-new_filterOutput = (1-percentage_weightage)*old_filterOutput + (percentage_weightage)*nextElement
+new_filterOutput = old_filterOutput + (weight)*(nextElement - old_filterOutput)
+
+# weight is a value between (0,1). A value of 1 disables the filter, passing the raw inputs as outputs.
 ```
-![](images/filter_ma_output.png)
-- The other is called `Exponential Moving Average` or `ema` in code, calculated with a time constant.
-```
-new_filterOutput = old_filterOutput + (T/Tf)*(nextElement - old_filterOutput)
-```
+
+![](images/filter_ema_output2.png)
 ![](images/filter_ema_output.png)
 
 ### Steps to execute:
@@ -107,11 +105,7 @@ $ sudo -H pip install -v scikit-learn
 ```
 
 ### Upgrading Numpy
-You may need to upgrade numpy after this, I got the error:
-```
-RuntimeError: module compiled against API version 0xc but this version of numpy is 0xa
-```
-Run:
+You may need to upgrade numpy after this, I got the error: `RuntimeError: module compiled against API version 0xc but this version of numpy is 0xa`. Run:
 ```
 $ sudo -H pip install -U -v numpy
 ```
@@ -120,8 +114,8 @@ $ sudo -H pip install -U -v numpy
 ---
 
 ### Problems with Pip
-There were problems, tried all of the following. Good tips in case there are problems with pip.
-In case pip install gets stuck after downloading whl file at setup.py, try this command (may want to use `-v` or `sudo -H`):
+Some tips in case there are problems with pip.
+In case pip install gets stuck after downloading whl file at `setup.py` step, try this command (may want to use `-v` or `sudo -H`):
 ```
 $ pip install --upgrade setuptools
 $ pip install --upgrade pip
