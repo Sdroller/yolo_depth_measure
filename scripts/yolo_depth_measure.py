@@ -18,7 +18,7 @@ topic_depth_image = '/zed/depth/depth_registered' #Image: 32-bit depth values in
 topic_bounding_box = 'YOLO_bboxes'
 topic_distance_to_person_raw = 'distance_to_person'
 topic_distance_to_person_filtered = 'distance_to_person_filtered'
-topic_centroid_pos_x = 'centroid_pos_x'
+topic_centroid_pos_y = 'centroid_pos_y'
 topic_rgb_image = '/zed/rgb/image_rect_color'
 topic_tracking_img = '/img_tracking_with_bounding_boxes'
 img_width = 672
@@ -47,7 +47,7 @@ class distance_detection:
         # We publish the distance detected
         self.dist_pub = rospy.Publisher(topic_distance_to_person_raw, Float32, queue_size=10)
         self.dist_filtered_pub = rospy.Publisher(topic_distance_to_person_filtered, Float32, queue_size=10)
-        self.centroid_position_x = rospy.Publisher(topic_centroid_pos_x, Float32, queue_size=10)
+        self.centroid_position_y = rospy.Publisher(topic_centroid_pos_y, Float32, queue_size=10)
         self.tracking_pub = rospy.Publisher(topic_tracking_img, Image, queue_size=10)
 
         #create instance of SORT
@@ -103,8 +103,8 @@ class distance_detection:
             centroid_bbox[0] = (detected_person_bbox[0] + detected_person_bbox[2])/2
             centroid_bbox[1] = (detected_person_bbox[1] + detected_person_bbox[3])/2
 
-            centroid_bbox[0] = np.clip(centroid_bbox[0], (0 + window_dim), (img_height  - window_dim) )
-            centroid_bbox[1] = np.clip(centroid_bbox[1], (0 + window_dim), (img_width - window_dim) )
+            centroid_bbox[0] = np.clip(centroid_bbox[0], (0 + window_dim), (img_width  - window_dim) )
+            centroid_bbox[1] = np.clip(centroid_bbox[1], (0 + window_dim), (img_height - window_dim) )
             mean_depth_image = cv_depth_image[centroid_bbox[1]-window_dim:centroid_bbox[1]+window_dim,\
                                               centroid_bbox[0]-window_dim:centroid_bbox[0]+window_dim]
 
@@ -119,11 +119,11 @@ class distance_detection:
             #Publish the distance
             self.dist_pub.publish(distance_to_person)
             self.dist_filtered_pub.publish(distance_to_person_filtered)
-            self.centroid_position_x.publish(centroid_bbox[1])
+            self.centroid_position_y.publish(centroid_bbox[0])
 
             msg_yolo_output1 = ("Person Detected!\n Bounding Box:\t (%d,%d), (%d,%d)\n Centroid of Box:\t %d,%d\n "
                                %(detected_person_bbox[0], detected_person_bbox[1], detected_person_bbox[2],
-                               detected_person_bbox[3], centroid_bbox[1], centroid_bbox[0]) )
+                               detected_person_bbox[3], centroid_bbox[0], centroid_bbox[1]) )
             msg_yolo_output2 = ("Prediction Prob:\t %0.3f\n distance_to_person_raw:\t%0.3f m\n distance_to_person_filtered:\t%0.3f m\n"\
                                %(last_confidence, distance_to_person, distance_to_person_filtered) )
             rospy.loginfo("%s%s", msg_yolo_output1, msg_yolo_output2)
