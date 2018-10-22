@@ -12,13 +12,15 @@ import cv2
 import numpy as np
 from numpy import inf
 
+#from sort.sort import *
+
 topic_depth_image = '/zed/depth/depth_registered' #Image: 32-bit depth values in meters
 topic_bounding_box = 'YOLO_bboxes'
 topic_distance_to_person_raw = 'distance_to_person'
 topic_distance_to_person_filtered = 'distance_to_person_filtered'
-topic_centroid_pos_x = 'centroid_pos_x'
-img_width = 672
-img_height =  376
+topic_centroid_pos_y = 'centroid_pos_y'
+img_height = 376
+img_width =  672
 distance_to_person = 0
 distance_to_person_filtered = 0
 print_distance_arrays = False # Setting this to true will print arrays used to detect distance to person.
@@ -37,7 +39,7 @@ class distance_detection:
         # We publish the distance detected
         self.dist_pub = rospy.Publisher(topic_distance_to_person_raw, Float32, queue_size=10)
         self.dist_filtered_pub = rospy.Publisher(topic_distance_to_person_filtered, Float32, queue_size=10)
-        self.centroid_position_x = rospy.Publisher(topic_centroid_pos_x, Float32, queue_size=10)
+        self.centroid_position_y = rospy.Publisher(topic_centroid_pos_y, Float32, queue_size=10)
 
         # Variables for the Moving Average Filter
         self.old_filterOutput=0.0
@@ -84,8 +86,8 @@ class distance_detection:
             centroid_bbox[0] = (detected_person_bbox[0] + detected_person_bbox[2])/2
             centroid_bbox[1] = (detected_person_bbox[1] + detected_person_bbox[3])/2
 
-            centroid_bbox[0] = np.clip(centroid_bbox[0], (0 + window_dim), (img_height  - window_dim) )
-            centroid_bbox[1] = np.clip(centroid_bbox[1], (0 + window_dim), (img_width - window_dim) )
+            centroid_bbox[0] = np.clip(centroid_bbox[0], (0 + window_dim), (img_width  - window_dim) )
+            centroid_bbox[1] = np.clip(centroid_bbox[1], (0 + window_dim), (img_height - window_dim) )
             mean_depth_image = cv_depth_image[centroid_bbox[1]-window_dim:centroid_bbox[1]+window_dim,\
                                               centroid_bbox[0]-window_dim:centroid_bbox[0]+window_dim]
 
@@ -100,12 +102,12 @@ class distance_detection:
             #Publish the distance
             self.dist_pub.publish(distance_to_person)
             self.dist_filtered_pub.publish(distance_to_person_filtered)
-            self.centroid_position_x.publish(centroid_bbox[1])
+            self.centroid_position_y.publish(centroid_bbox[0])
 
 
             rospy.loginfo("Person Detected!\n Bounding Box:\t (%d,%d), (%d,%d)\n Centroid of Box:\t %d,%d\n", \
                 detected_person_bbox[0], detected_person_bbox[1], detected_person_bbox[2], detected_person_bbox[3], \
-                centroid_bbox[1], centroid_bbox[0])
+                centroid_bbox[0], centroid_bbox[1])
             rospy.loginfo("Prediction Prob:\t %0.3f\n distance_to_person_raw:\t%0.3f m\n distance_to_person_filtered:\t%0.3f m\n", \
                 last_confidence, distance_to_person, distance_to_person_filtered)
 
@@ -166,4 +168,3 @@ def main(args):
 
 if __name__ == '__main__':
     main(sys.argv)
-
