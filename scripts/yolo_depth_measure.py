@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+import sys
+sys.path.append('../')
+
 import rospy
 import message_filters
 from std_msgs.msg import *
@@ -21,11 +24,7 @@ distance_to_person_filtered = 0
 print_distance_arrays = False # Setting this to true will print arrays used to detect distance to person.
 
 class distance_detection:
-    # Variables for the Moving Average Filter
-    old_filterOutput=0.0
 
-    # Variables for the Exponential Moving Average Filter
-    ema_old_filterOutput=0.0
 
 
     def __init__(self):
@@ -40,7 +39,11 @@ class distance_detection:
         self.dist_filtered_pub = rospy.Publisher(topic_distance_to_person_filtered, Float32, queue_size=10)
         self.centroid_position_x = rospy.Publisher(topic_centroid_pos_x, Float32, queue_size=10)
 
+        # Variables for the Moving Average Filter
+        self.old_filterOutput=0.0
 
+        # Variables for the Exponential Moving Average Filter
+        self.ema_old_filterOutput=0.0
 
     def callback(self, bbox_array, zed_depth_img):
 
